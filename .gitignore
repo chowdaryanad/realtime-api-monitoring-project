@@ -1,0 +1,72 @@
+# ===========================
+# Environment & Secrets
+# ===========================
+.env
+*.pem
+*.key
+*.crt
+
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ===========================
+# Node (if applicable)
+# ===========================
+node_modules/
+package-lock.json
+
+# ===========================
+# IDE / Editor
+# ===========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# ===========================
+# OS Generated
+# ===========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ===========================
+# Docker volumes (local dev)
+# ===========================
+postgres-data/
+prometheus-data/
+grafana-data/
+loki-data/
+alertmanager-data/
+
+# ===========================
+# Logs
+# ===========================
+*.log
+logs/*.log
+logs/*.json
+
+# ===========================
+# Misc
+# ===========================
+*.bak
+*.tmp
+*.temp

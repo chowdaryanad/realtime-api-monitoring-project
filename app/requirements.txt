@@ -1,0 +1,16 @@
+# =============================================================================
+# Python Dependencies — RTAM API (container-local copy)
+# =============================================================================
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+pydantic==2.7.1
+pydantic-settings==2.2.1
+sqlalchemy[asyncio]==2.0.29
+asyncpg==0.29.0
+alembic==1.13.1
+prometheus-client==0.20.0
+prometheus-fastapi-instrumentator==7.0.0
+python-json-logger==2.0.7
+structlog==24.1.0
+httpx==0.27.0
+python-dotenv==1.0.1

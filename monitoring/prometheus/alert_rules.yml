@@ -1,0 +1,82 @@
+# =============================================================================
+# Prometheus Alert Rules
+# =============================================================================
+
+groups:
+  # -------------------------------------------------------------------------
+  # API Health
+  # -------------------------------------------------------------------------
+  - name: api_health
+    rules:
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="rtam-api"}[5m])) by (le)) > 1.0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency exceeds 1s"
+          description: "The 95th percentile latency for {{ $labels.job }} has been above 1 second for more than 2 minutes."
+
+      - alert: APIHighErrorRate
+        expr: sum(rate(http_requests_total{job="rtam-api", status=~"5.."}[5m])) / sum(rate(http_requests_total{job="rtam-api"}[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API error rate exceeds 5%"
+          description: "The 5xx error rate for {{ $labels.job }} is above 5% for over 2 minutes."
+
+      - alert: APIDown
+        expr: up{job="rtam-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API instance is down"
+          description: "{{ $labels.instance }} has been unreachable for more than 1 minute."
+
+  # -------------------------------------------------------------------------
+  # Request Rate Anomalies
+  # -------------------------------------------------------------------------
+  - name: request_rates
+    rules:
+      - alert: HighRequestRate
+        expr: sum(rate(http_requests_total{job="rtam-api"}[1m])) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Abnormally high request rate detected"
+          description: "The request rate for {{ $labels.job }} exceeds 5 req/s (1m average) — current value: {{ $value | printf \"%.2f\" }} req/s."
+
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{job="rtam-api", status=~"4.."}[1m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Client error responses detected (4xx)"
+          description: "4xx errors are being returned by {{ $labels.job }} — current rate: {{ $value | printf \"%.4f\" }} errors/s over the last 1 minute."
+
+  # -------------------------------------------------------------------------
+  # Infrastructure
+  # -------------------------------------------------------------------------
+  - name: infrastructure
+    rules:
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes{job="rtam-api"} > 512 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API memory usage exceeds 512MB"
+          description: "{{ $labels.instance }} resident memory is above 512MB."
+
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape target is down"
+          description: "{{ $labels.job }} target {{ $labels.instance }} is unreachable."

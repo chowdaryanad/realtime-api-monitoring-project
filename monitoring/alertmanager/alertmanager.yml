@@ -1,0 +1,40 @@
+# =============================================================================
+# Alertmanager Configuration
+# =============================================================================
+
+global:
+  resolve_timeout: 5m
+  # smtp_smarthost: "smtp.example.com:587"
+  # smtp_from: "alertmanager@example.com"
+  # smtp_auth_username: "alertmanager@example.com"
+  # smtp_auth_password: "<secret>"
+
+route:
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "default-receiver"
+
+  routes:
+    - match:
+        severity: critical
+      receiver: "critical-receiver"
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  - name: "default-receiver"
+    # TODO: configure webhook / email / Slack
+    webhook_configs: []
+
+  - name: "critical-receiver"
+    # TODO: configure PagerDuty / OpsGenie for critical alerts
+    webhook_configs: []
+
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname"]
