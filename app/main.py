@@ -5,8 +5,10 @@ Initialises the FastAPI application with Prometheus instrumentation
 for real-time metrics collection and monitoring.
 """
 
-from fastapi import FastAPI
-from prometheus_fastapi_instrumentator import Instrumentator
+from fastapi import FastAPI, Response
+from prometheus_client import generate_latest
+
+from app.core.middleware import setup_middleware
 
 app = FastAPI(
     title="RTAM API",
@@ -14,6 +16,9 @@ app = FastAPI(
     version="1.0.0",
 )
 
+@app.get("/crash")
+def crash():
+    raise Exception("Simulated failure")  #this is lastly modified
 
 @app.get("/")
 def root():
@@ -25,10 +30,11 @@ def health():
     return {"status": "healthy", "service": "rtam-api"}
 
 
-# Prometheus metrics instrumentation
-instrumentator = Instrumentator(
-    should_group_status_codes=True,
-    should_ignore_untemplated=True,
-    excluded_handlers=["/health", "/metrics"],
-)
-instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    """Expose Prometheus metrics."""
+    return Response(generate_latest(), media_type="text/plain")
+
+
+# Register all middleware (metrics, CORS, trusted-host)
+setup_middleware(app)

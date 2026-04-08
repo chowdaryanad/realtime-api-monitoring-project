@@ -1,21 +1,15 @@
 """
-Prometheus metrics instrumentation.
+Prometheus metrics definitions.
+
+All application-level metrics are defined here as singletons.
+Import from this module wherever you need to record metrics —
+never re-define counters/gauges/histograms elsewhere.
 """
 
-from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter
 
-
-def setup_metrics(app):
-    """Attach Prometheus metrics middleware to the FastAPI application.
-
-    IMPORTANT: This must be called AFTER all routes are registered on the app.
-    The instrumentator middleware matches requests to route handlers — routes
-    added later will not be tracked.
-    """
-    Instrumentator(
-        should_group_status_codes=True,
-        should_ignore_untemplated=True,
-        should_respect_env_var=False,
-        excluded_handlers=["/metrics"],
-        env_var_name="PROMETHEUS_ENABLED",
-    ).instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+http_requests_total = Counter(
+    "http_requests_total",
+    "Total number of HTTP requests",
+    ["method", "handler", "status"],
+)

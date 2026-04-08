@@ -50,13 +50,31 @@ groups:
           description: "The request rate for {{ $labels.job }} exceeds 5 req/s (1m average) — current value: {{ $value | printf \"%.2f\" }} req/s."
 
       - alert: HighErrorRate
-        expr: sum(rate(http_requests_total{job="rtam-api", status=~"4.."}[1m])) > 0
-        for: 1m
+        expr: increase(http_requests_total{status=~"4.."}[1m]) > 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High client error rate detected"
+          description: "4xx errors are occurring in the API"
+
+      - alert: HighServerErrorRate
+        expr: increase(http_requests_total{status=~"5.."}[1m]) > 0
+        for: 10s
+        labels:
+          severity: critical
+        annotations:
+          summary: "High server error rate detected"
+          description: "5xx errors are occurring in the API"
+
+      - alert: HighTrafficSpike
+        expr: rate(http_requests_total[1m]) > 5
+        for: 15s
         labels:
           severity: warning
         annotations:
-          summary: "Client error responses detected (4xx)"
-          description: "4xx errors are being returned by {{ $labels.job }} — current rate: {{ $value | printf \"%.4f\" }} errors/s over the last 1 minute."
+          summary: "High traffic spike detected"
+          description: "Request rate is unusually high"
 
   # -------------------------------------------------------------------------
   # Infrastructure
