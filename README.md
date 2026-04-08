@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🔍 Real-Time API Monitoring & Observability System
+# Real-Time API Monitoring & Observability System
 
-**Production-grade API monitoring stack built with FastAPI, Prometheus, Grafana, Loki, and Alertmanager**
+**A production-grade observability stack that instruments a FastAPI application with custom Prometheus metrics, automated Grafana dashboards, and email-based alerting — deployed as a single Docker Compose command.**
 
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -14,246 +14,281 @@
 
 ---
 
-## 📐 Architecture
+## Overview
+
+This project implements a complete monitoring pipeline for a REST API — from metric instrumentation at the application layer, through collection and storage in Prometheus, to visualization in Grafana and automated alerting via email.
+
+The system is designed around a single custom metric, `http_requests_total`, recorded through a hand-written Starlette middleware rather than a third-party auto-instrumentator. This gives full control over label cardinality and ensures every request — including unhandled exceptions that result in 5xx responses — is accurately captured.
+
+**What makes this different from a tutorial project:**
+- Metrics middleware uses `try/except/finally` to guarantee counter increments even on server errors
+- Alert rules use `increase()` instead of `rate()` to fire reliably in low-traffic environments
+- Grafana dashboards are auto-provisioned on container startup with no manual import steps
+- Alertmanager delivers real email notifications (FIRING and RESOLVED) via Gmail SMTP
+- All 8 services include health checks, restart policies, and structured logging
+
+---
+
+## Architecture
 
 ```
                          ┌──────────────────────────────────────────────────┐
                          │              Monitoring Network                 │
                          │                                                 │
 ┌─────────────┐          │   ┌──────────────┐       ┌──────────────────┐   │
-│             │  /metrics │   │  Prometheus  │──────▶│  Alertmanager    │   │
-│   FastAPI   │──────────────▶│  :9090       │       │  :9093           │   │
-│   :8000     │          │   └──────┬───────┘       └──────────────────┘   │
-│             │          │          │                                       │
-└──────┬──────┘          │          ▼                                       │
+│             │  /metrics │   │  Prometheus  │──────>│  Alertmanager    │   │
+│   FastAPI   │──────────────>│  :9090       │       │  :9093           │   │
+│   :8000     │          │   └──────┬───────┘       └────────┬─────────┘   │
+│             │          │          │                         │             │
+└──────┬──────┘          │          v                    Email (SMTP)       │
        │                 │   ┌──────────────┐                              │
-       │   logs          │   │   Grafana    │◀── Dashboards (auto-provisioned)
+       │   logs          │   │   Grafana    │<── Dashboards (provisioned)  │
        │                 │   │   :3000      │                              │
-       ▼                 │   └──────────────┘                              │
-┌──────────────┐         │          ▲                                       │
-│  Promtail    │────────────▶┌─────┴────────┐                              │
+       v                 │   └──────────────┘                              │
+┌──────────────┐         │          ^                                      │
+│  Promtail    │────────────>┌─────┴────────┐                              │
 │  (log agent) │         │   │    Loki      │                              │
 └──────────────┘         │   │    :3100     │                              │
                          │   └──────────────┘                              │
 ┌──────────────┐         │                                                 │
-│  PostgreSQL  │         └──────────────────────────────────────────────────┘
+│  PostgreSQL  │         └─────────────────────────────────────────────────┘
 │  :5432       │
 └──────────────┘
 ```
 
-**Data Flow:**
-1. **FastAPI** exposes `/metrics` endpoint → **Prometheus** scrapes every 10s
-2. **Prometheus** evaluates alert rules → fires alerts to **Alertmanager**
-3. **Promtail** collects container + application logs → ships to **Loki**
-4. **Grafana** queries Prometheus (metrics) + Loki (logs) → unified dashboards
+**Data flow:**
+1. Every HTTP request passes through `MetricsMiddleware`, which increments `http_requests_total` with `method`, `handler`, and `status` labels
+2. Prometheus scrapes the `/metrics` endpoint every 10 seconds and evaluates alert rules
+3. When an alert fires, Prometheus pushes it to Alertmanager, which sends an email via Gmail SMTP
+4. Grafana queries Prometheus for dashboard panels — auto-provisioned on startup, no manual setup
 
 ---
 
-## ⚡ Features
+## Tech Stack
 
-| Category | Feature | Details |
-|----------|---------|---------|
-| 📊 **Metrics** | Request rate monitoring | Track requests/sec across all endpoints |
-| 📊 **Metrics** | Latency percentiles | P50, P90, P95, P99 response times |
-| 📊 **Metrics** | Status code tracking | Breakdowns by 2xx, 4xx, 5xx |
-| 🚨 **Alerting** | API down detection | Fires within 1 min of downtime |
-| 🚨 **Alerting** | High error rate (>5%) | Critical alert on 5xx spike |
-| 🚨 **Alerting** | Latency threshold | Warning when p95 > 1 second |
-| 🚨 **Alerting** | Memory threshold | Warning when RSS > 512 MB |
-| 📝 **Logging** | Structured JSON logs | Via structlog + python-json-logger |
-| 📝 **Logging** | Centralized aggregation | Loki + Promtail pipeline |
-| 📈 **Dashboards** | Auto-provisioned | Zero-config Grafana dashboards on startup |
-| 🐳 **Infra** | Full Docker Compose | One-command deployment |
-| 🐳 **Infra** | Health checks | All services include readiness probes |
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology | Version |
+| Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **API Framework** | FastAPI + Uvicorn | 0.111 |
-| **Database** | PostgreSQL (Alpine) | 16 |
-| **Metrics** | Prometheus | 2.51 |
-| **Visualization** | Grafana | 10.4 |
-| **Alerting** | Alertmanager | 0.27 |
-| **Log Aggregation** | Loki | 2.9.6 |
-| **Log Shipping** | Promtail | 2.9.6 |
-| **Language** | Python | 3.12 |
-| **Containerization** | Docker Compose | v2 |
+| **Application** | FastAPI 0.111 + Uvicorn | Async Python API with `/health`, `/crash`, `/metrics` endpoints |
+| **Database** | PostgreSQL 16 (Alpine) | Persistent data store |
+| **Metrics** | prometheus-client + custom middleware | `http_requests_total` counter with method/handler/status labels |
+| **Collection** | Prometheus 2.51 | Scraping, storage (15d retention), alert rule evaluation |
+| **Visualization** | Grafana 10.4 | Auto-provisioned dashboards with stat, time series, bar, and pie panels |
+| **Alerting** | Alertmanager 0.27 | Email notifications via Gmail SMTP with severity-based routing |
+| **Logging** | Loki 2.9.6 + Promtail | Centralized log aggregation from containers and application logs |
+| **Orchestration** | Docker Compose v2 | Single-command deployment of all 8 services |
 
 ---
 
-## 🚀 Quick Start
+## Features
+
+### Instrumentation
+
+- **Custom metrics middleware** — Hand-written `BaseHTTPMiddleware` subclass that records every request, not a black-box auto-instrumentator
+- **Exception-safe counting** — `try/except/finally` pattern ensures 5xx errors from unhandled exceptions are always recorded
+- **Singleton counter** — `http_requests_total` defined once in `app/core/metrics.py`, imported wherever needed, preventing duplicate registration errors
+- **Status code bucketing** — Responses grouped as `2xx`, `4xx`, `5xx` for clean aggregation in dashboards and alert rules
+
+### Dashboards (Grafana)
+
+Two auto-provisioned dashboards on startup:
+
+| Panel | Type | Query |
+|-------|------|-------|
+| Total Requests | Stat | `sum(http_requests_total)` |
+| Request Rate (RPS) | Stat | `sum(rate(http_requests_total[1m]))` |
+| Error Rate (4xx) | Stat | `sum(rate(http_requests_total{status=~"4.."}[1m]))` |
+| API Status (UP/DOWN) | Stat | `up{job="rtam-api"}` |
+| Request Rate — Time Series | Time series | `rate(http_requests_total[1m])` by label |
+| Requests by Endpoint | Bar chart | `sum by (handler) (http_requests_total)` |
+| Status Code Distribution | Donut pie | `sum by (status) (http_requests_total)` |
+| 4xx/5xx Error Rate | Time series | Error rates over time with threshold lines |
+
+### Alerting
+
+| Alert | Expression | Severity | Fires After |
+|-------|-----------|----------|-------------|
+| `APIDown` | `up{job="rtam-api"} == 0` | Critical | 1 min |
+| `APIHighErrorRate` | 5xx error ratio > 5% over 5m | Critical | 2 min |
+| `HighErrorRate` | `increase(http_requests_total{status=~"4.."}[1m]) > 0` | Critical | 10s |
+| `HighServerErrorRate` | `increase(http_requests_total{status=~"5.."}[1m]) > 0` | Critical | 10s |
+| `HighTrafficSpike` | `rate(http_requests_total[1m]) > 5` | Warning | 15s |
+| `HighRequestRate` | `sum(rate(...[1m])) > 5` | Warning | 1 min |
+| `APIHighLatency` | P95 latency > 1 second | Warning | 2 min |
+| `HighMemoryUsage` | RSS > 512 MB | Warning | 5 min |
+| `PrometheusTargetDown` | Any scrape target unreachable | Warning | 3 min |
+
+**Why `increase()` over `rate()`:** In low-traffic environments, `rate()` returns a per-second average that can hover near zero due to floating-point precision — making `> 0` unreliable. `increase()` returns the actual count of events in the window, so even a single 4xx or 5xx reliably triggers the alert.
+
+### Email Notifications
+
+- FIRING and RESOLVED emails via Gmail SMTP (TLS)
+- Severity-based routing: critical alerts repeat every 30 minutes, others every hour
+- Inhibition rules: critical alerts suppress corresponding warnings to reduce noise
+
+---
+
+## Setup
 
 ### Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/) v2+
-- Git
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) v2+
+- A Gmail account with [App Password](https://myaccount.google.com/apppasswords) (requires 2-Step Verification)
 
-### 1. Clone the Repository
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/chowdaryanad/realtime-api-monitoring-project.git
 cd realtime-api-monitoring-project
-```
-
-### 2. Configure Environment
-
-```bash
 cp .env.example .env
-# Edit .env → set POSTGRES_PASSWORD and GF_ADMIN_PASSWORD
+# Edit .env — set POSTGRES_PASSWORD and GF_ADMIN_PASSWORD
 ```
 
-### 3. Launch the Stack
+### 2. Configure email alerts (optional)
+
+Edit `monitoring/alertmanager/alertmanager.yml` and replace the SMTP placeholders with your Gmail address and App Password.
+
+### 3. Launch
 
 ```bash
 docker compose up --build -d
 ```
 
-### 4. Verify Services
+### 4. Verify
 
 ```bash
-# API health check
+# API health
 curl http://localhost:8000/health
-# → {"status":"healthy","service":"rtam-api"}
+# {"status":"healthy","service":"rtam-api"}
 
 # Prometheus targets
-curl http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].health'
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].health'
+# "up"
 ```
 
----
+### Service URLs
 
-## 🌐 Access URLs
-
-| Service | URL | Default Credentials |
-|---------|-----|-------------------|
-| **API** | [http://localhost:8000](http://localhost:8000) | — |
-| **API Docs (Swagger)** | [http://localhost:8000/docs](http://localhost:8000/docs) | — |
-| **Prometheus** | [http://localhost:9090](http://localhost:9090) | — |
-| **Grafana** | [http://localhost:3000](http://localhost:3000) | `admin` / `admin` |
-| **Alertmanager** | [http://localhost:9093](http://localhost:9093) | — |
-| **Loki** | [http://localhost:3100](http://localhost:3100) | — |
+| Service | URL | Credentials |
+|---------|-----|------------|
+| API | http://localhost:8000 | — |
+| API Docs (Swagger) | http://localhost:8000/docs | — |
+| Prometheus | http://localhost:9090 | — |
+| Grafana | http://localhost:3000 | `admin` / `admin` |
+| Alertmanager | http://localhost:9093 | — |
 
 ---
 
-## 📂 Project Structure
+## Testing the Observability Pipeline
+
+These endpoints let you generate different status codes and verify that metrics, dashboards, and alerts respond correctly.
+
+```bash
+# Generate 2xx — healthy traffic
+curl http://localhost:8000/health
+
+# Generate 4xx — triggers HighErrorRate alert
+curl http://localhost:8000/invalid-endpoint
+
+# Generate 5xx — triggers HighServerErrorRate alert
+curl http://localhost:8000/crash
+```
+
+**What to verify after each request:**
+
+1. **Metrics** — `curl http://localhost:8000/metrics | grep http_requests_total` should show incremented counters with correct status labels
+2. **Prometheus** — Navigate to Alerts tab at http://localhost:9090/alerts to see FIRING state
+3. **Grafana** — Open http://localhost:3000 and check the API Monitoring dashboard for live updates
+4. **Email** — After alert fires, check inbox for FIRING notification; after resolution, a RESOLVED email follows
+
+---
+
+## Project Structure
 
 ```
 realtime-api-monitoring-project/
-│
-├── app/                                  # FastAPI Application
-│   ├── Dockerfile                        # Multi-stage Python 3.12 image
-│   ├── main.py                           # App entrypoint with Prometheus instrumentation
-│   ├── requirements.txt                  # Python dependencies (container)
+├── app/
+│   ├── Dockerfile
+│   ├── main.py                           # App entrypoint — routes + /metrics endpoint
+│   ├── requirements.txt
 │   └── app/
-│       ├── api/v1/endpoints/             # REST route handlers
-│       ├── core/                         # Config, middleware, metrics, logging
-│       ├── db/                           # SQLAlchemy async engine & sessions
-│       ├── models/                       # ORM models
-│       ├── schemas/                      # Pydantic request/response schemas
-│       └── services/                     # Business logic layer
+│       ├── core/
+│       │   ├── metrics.py                # http_requests_total Counter (single definition)
+│       │   ├── middleware.py             # MetricsMiddleware + CORS + TrustedHost
+│       │   ├── config.py
+│       │   └── logging.py
+│       ├── api/v1/endpoints/
+│       ├── db/
+│       ├── models/
+│       ├── schemas/
+│       └── services/
 │
 ├── monitoring/
 │   ├── prometheus/
-│   │   ├── prometheus.yml                # Scrape config (API, Loki, self)
-│   │   └── alert_rules.yml              # 7 production alert rules
+│   │   ├── prometheus.yml                # Scrape config (10s interval for API)
+│   │   └── alert_rules.yml              # 9 alert rules across 3 groups
 │   ├── alertmanager/
-│   │   └── alertmanager.yml             # Routing & receiver config
+│   │   └── alertmanager.yml             # Gmail SMTP + severity-based routing
 │   ├── grafana/
 │   │   ├── provisioning/
-│   │   │   ├── datasources/             # Auto-provisioned: Prometheus, Loki, Alertmanager
-│   │   │   └── dashboards/              # Dashboard file provider config
+│   │   │   ├── datasources/             # Prometheus, Loki, Alertmanager
+│   │   │   └── dashboards/              # File-based dashboard provider
 │   │   └── dashboards/
-│   │       └── api-overview.json        # Pre-built API monitoring dashboard
+│   │       ├── api-monitoring.json      # Primary dashboard (8 panels)
+│   │       └── api-overview.json        # Secondary overview dashboard
 │   ├── loki/
-│   │   └── loki.yml                     # TSDB storage, 14-day retention
+│   │   └── loki.yml
 │   └── promtail/
-│       └── promtail.yml                 # Docker + file log scraping
+│       └── promtail.yml
 │
-├── tests/                               # Test suite (pytest)
-├── docker-compose.yml                   # Full stack orchestration (8 services)
-├── .env.example                         # Environment variable template
-├── .gitignore                           # Comprehensive ignore rules
-├── requirements.txt                     # Dev/CI dependencies
+├── docker-compose.yml                    # 8 services with health checks
+├── .env.example
+├── .gitignore
 └── README.md
 ```
 
 ---
 
-## 📊 Example Prometheus Queries
+## Key Design Decisions
 
-```promql
-# Request rate (req/s)
-sum(rate(http_requests_total{job="rtam-api"}[1m]))
+These are the non-obvious choices that differentiate this from a basic tutorial setup:
 
-# P95 response latency
-histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="rtam-api"}[5m])) by (le))
-
-# 5xx error rate (%)
-sum(rate(http_requests_total{job="rtam-api", status=~"5.."}[5m]))
-/ sum(rate(http_requests_total{job="rtam-api"}[5m])) * 100
-
-# API uptime status
-up{job="rtam-api"}
-
-# Memory usage (MB)
-process_resident_memory_bytes{job="rtam-api"} / 1024 / 1024
-
-# Total requests by endpoint
-sum by (handler) (rate(http_requests_total{job="rtam-api"}[5m]))
-```
+| Decision | Rationale |
+|----------|-----------|
+| **Custom middleware over auto-instrumentator** | `prometheus-fastapi-instrumentator` creates its own metric names and doesn't expose `http_requests_total`. Writing the middleware by hand gives full control over metric naming, label cardinality, and exception handling. |
+| **`increase()` in alert rules** | `rate()` returns a per-second float that's unreliable near zero in low-traffic environments. `increase()` returns integer event counts, making `> 0` thresholds deterministic. |
+| **`try/except/finally` in middleware** | Without exception handling, any unhandled error skips the counter increment entirely — meaning 5xx responses are invisible to monitoring. The `finally` block guarantees the metric is recorded regardless of outcome. |
+| **Singleton counter in `metrics.py`** | Defining the counter in one module and importing it prevents `Duplicated timeseries` registration errors that occur when counters are instantiated in multiple places. |
+| **`send_resolved: true` in Alertmanager** | Receiving RESOLVED emails confirms the system is self-healing and provides a complete audit trail of incidents. |
+| **Datasource variable in Grafana JSON** | Using `${DS_PROMETHEUS}` instead of a hardcoded datasource UID makes dashboards portable across environments without manual editing. |
 
 ---
 
-## 🚨 Alert Rules
+## Key Learnings
 
-| Alert | Condition | Severity | Duration |
-|-------|-----------|----------|----------|
-| `APIDown` | `up{job="rtam-api"} == 0` | 🔴 Critical | 1 min |
-| `APIHighErrorRate` | 5xx rate > 5% | 🔴 Critical | 2 min |
-| `APIHighLatency` | P95 > 1 second | 🟡 Warning | 2 min |
-| `HighRequestRate` | > 5 req/s (1m avg) | 🟡 Warning | 1 min |
-| `HighErrorRate` | Any 4xx errors | 🟡 Warning | 1 min |
-| `HighMemoryUsage` | RSS > 512 MB | 🟡 Warning | 5 min |
-| `PrometheusTargetDown` | Any target unreachable | 🟡 Warning | 3 min |
+1. **Observability is not monitoring** — Monitoring tells you *when* something breaks; observability tells you *why*. Structured metrics with meaningful labels (`method`, `handler`, `status`) enable root-cause analysis without searching through logs.
 
----
+2. **Middleware ordering matters** — Starlette processes middleware in reverse registration order. `MetricsMiddleware` must be registered first (via `add_middleware`) so it wraps all other middleware and captures the final response status.
 
-## 🧪 Development
+3. **`rate()` vs `increase()` is a real operational decision** — In production, low-traffic services with `rate()` + `> 0` thresholds will produce false negatives. This is a common interview discussion point around PromQL precision.
 
-```bash
-# Install dependencies locally
-pip install -r requirements.txt
+4. **Infrastructure-as-Code for dashboards** — Manually creating Grafana dashboards is a liability. Provisioning via JSON + volume mounts ensures dashboards are version-controlled, reproducible, and survive container restarts.
 
-# Run API without Docker
-cd app && uvicorn main:app --reload --port 8000
-
-# Run tests
-pytest tests/ -v
-
-# Lint code
-ruff check app/
-```
+5. **Alert fatigue is a design problem** — Inhibition rules (critical suppresses warning for the same alert), `group_by` labels, and tuned `repeat_interval` values prevent duplicate notifications during an incident.
 
 ---
 
-## 🔮 Future Improvements
+## Future Improvements
 
-- [ ] **Slack / PagerDuty integration** — Wire Alertmanager receivers to real notification channels
-- [ ] **PostgreSQL Exporter** — Add `postgres-exporter` for database-level metrics (connections, query performance)
-- [ ] **Distributed tracing** — Integrate OpenTelemetry + Jaeger/Tempo for end-to-end request tracing
-- [ ] **Custom business metrics** — Track domain-specific KPIs (API monitor success rate, uptime SLA)
-- [ ] **CI/CD pipeline** — GitHub Actions for automated testing, linting, and image builds
-- [ ] **Kubernetes migration** — Helm charts for k8s deployment with HPA and PDB
-- [ ] **SSL/TLS** — Nginx reverse proxy with Let's Encrypt certificates
-- [ ] **Rate limiting** — Per-client request throttling with Redis-backed middleware
-- [ ] **Grafana alerts** — Unified alerting from Grafana with multi-channel notifications
-- [ ] **Load testing suite** — Automated k6 / Locust scripts for performance benchmarking
+- [ ] **Distributed tracing** — OpenTelemetry SDK + Jaeger/Tempo for end-to-end request tracing
+- [ ] **PostgreSQL Exporter** — Database-level metrics (active connections, query latency, replication lag)
+- [ ] **CI/CD pipeline** — GitHub Actions for automated testing, linting, and container image builds
+- [ ] **Kubernetes migration** — Helm charts with HPA, PDB, and ServiceMonitor CRDs for Prometheus Operator
+- [ ] **Slack / PagerDuty integration** — Additional Alertmanager receivers for team-based routing
+- [ ] **Rate limiting** — Redis-backed per-client throttling with metrics exported to Prometheus
+- [ ] **Load testing** — k6 or Locust scripts for sustained performance benchmarking under realistic traffic patterns
 
 ---
 
-## 📝 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).
 
@@ -261,8 +296,8 @@ This project is licensed under the [MIT License](LICENSE).
 
 <div align="center">
 
-**Built with ❤️ for Production-Grade Observability**
+**Built for production-grade observability**
 
-[⬆ Back to Top](#-real-time-api-monitoring--observability-system)
+[Back to Top](#real-time-api-monitoring--observability-system)
 
 </div>
